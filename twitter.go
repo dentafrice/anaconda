@@ -102,9 +102,17 @@ type response struct {
 const DEFAULT_DELAY = 0 * time.Second
 const DEFAULT_CAPACITY = 5
 
+type TwitterApiOption func(*TwitterApi)
+
+func WithHTTPClient(client *http.Client) TwitterApiOption {
+	return func(api *TwitterApi) {
+		api.HttpClient = client
+	}
+}
+
 //NewTwitterApi takes an user-specific access token and secret and returns a TwitterApi struct for that user.
 //The TwitterApi struct can be used for accessing any of the endpoints available.
-func NewTwitterApi(access_token string, access_token_secret string) *TwitterApi {
+func NewTwitterApi(access_token string, access_token_secret string, options ...TwitterApiOption) *TwitterApi {
 	//TODO figure out how much to buffer this channel
 	//A non-buffered channel will cause blocking when multiple queries are made at the same time
 	queue := make(chan query)
@@ -126,6 +134,11 @@ func NewTwitterApi(access_token string, access_token_secret string) *TwitterApi 
 		Log:                  silentLogger{},
 		baseUrl:              BaseUrl,
 	}
+
+	for _, option := range options {
+		option(c)
+	}
+
 	//Configure a timeout to HTTP client (DefaultClient has no default timeout, which may deadlock Mutex-wrapped uses of the lib.)
 	c.HttpClient.Timeout = time.Duration(ClientTimeout * time.Second)
 	go c.throttledQuery()
@@ -134,8 +147,14 @@ func NewTwitterApi(access_token string, access_token_secret string) *TwitterApi 
 
 //NewTwitterApiWithCredentials takes an app-specific consumer key and secret, along with a user-specific access token and secret and returns a TwitterApi struct for that user.
 //The TwitterApi struct can be used for accessing any of the endpoints available.
-func NewTwitterApiWithCredentials(access_token string, access_token_secret string, consumer_key string, consumer_secret string) *TwitterApi {
-	api := NewTwitterApi(access_token, access_token_secret)
+func NewTwitterApiWithCredentials(
+	access_token string,
+	access_token_secret string,
+	consumer_key string,
+	consumer_secret string,
+	options ...TwitterApiOption,
+) *TwitterApi {
+	api := NewTwitterApi(access_token, access_token_secret, options...)
 	api.oauthClient.Credentials.Token = consumer_key
 	api.oauthClient.Credentials.Secret = consumer_secret
 	return api
